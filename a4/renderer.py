@@ -41,7 +41,23 @@ class SphereTracingRenderer(torch.nn.Module):
         #   in order to compute intersection points of rays with the implicit surface
         # 2) Maintain a mask with the same batch dimension as the ray origins,
         #   indicating which points hit the surface, and which do not
-        pass
+        # pass
+
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+        else:
+            device = torch.device("cpu")
+
+        points = origins.clone()
+        eps_threshold = 1e-4
+        mask = torch.zeros((origins.shape[0],1), dtype=torch.bool)
+        
+        for i in range(self.max_iters):
+            distance = implicit_fn.get_distance(torch.Tensor(points).to(device))
+            points += (distance * directions) 
+            mask[distance < eps_threshold] = 1
+        
+        return points, mask
 
     def forward(
         self,
@@ -91,7 +107,20 @@ class SphereTracingRenderer(torch.nn.Module):
 
 def sdf_to_density(signed_distance, alpha, beta):
     # TODO (Q3): Convert signed distance to density with alpha, beta parameters
-    pass
+    # pass
+
+    # psi_beta = torch.zeros_like(signed_distance)
+    # inds1 = torch.where(-signed_distance <= 0)
+    # psi_beta[inds1] = 0.5 * torch.exp(-signed_distance[inds1] / beta)
+    # inds2 = torch.where(-signed_distance > 0)
+    # psi_beta[inds2] = 1 - 0.5 * torch.exp(signed_distance[inds2] / beta)
+    # sigma = alpha * psi_beta
+
+    # q5.3
+    e = -signed_distance * 50
+    sigma = 50 * torch.exp(e) / (1 + torch.exp(e))**2
+
+    return sigma
 
 class VolumeSDFRenderer(torch.nn.Module):
     def __init__(
@@ -114,7 +143,24 @@ class VolumeSDFRenderer(torch.nn.Module):
         eps: float = 1e-10
     ):
         # TODO (Q3): Copy code from VolumeRenderer._compute_weights
-        pass
+        # pass
+
+        if torch.cuda.is_available():
+            device = torch.device("cuda:0")
+        else:
+            device = torch.device("cpu")
+
+        emission = 1 - torch.exp(-rays_density * deltas)
+        num_dirs = rays_density.shape[0]
+        num_pts = rays_density.shape[1]
+        
+        T_initial = [torch.ones((num_dirs,1)).to(device)]
+        for ray_point in range(num_pts-1):
+            T_initial.append(T_initial[-1]* torch.exp(-rays_density[:,ray_point]* deltas[:,ray_point]))
+
+        T_chain = torch.stack(T_initial,dim=1)
+        weights = T_chain * emission
+        return weights
     
     def _aggregate(
         self,
@@ -122,7 +168,10 @@ class VolumeSDFRenderer(torch.nn.Module):
         rays_color: torch.Tensor
     ):
         # TODO (Q3): Copy code from VolumeRenderer._aggregate
-        pass
+        # pass
+        rays_features = (weights * rays_color)
+        feature = torch.sum(rays_features,axis=1)
+        return feature
 
     def forward(
         self,
@@ -145,7 +194,8 @@ class VolumeSDFRenderer(torch.nn.Module):
 
             # Call implicit function with sample points
             distance, color = implicit_fn.get_distance_color(cur_ray_bundle.sample_points)
-            density = None # TODO (Q3): convert SDF to density
+            # density = None # TODO (Q3): convert SDF to density
+            density = sdf_to_density(distance, self.alpha, self.beta) # TODO (Q3): convert SDF to density
 
             # Compute length of each ray segment
             depth_values = cur_ray_bundle.sample_lengths[..., 0]

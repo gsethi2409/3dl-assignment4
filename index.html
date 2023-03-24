@@ -1,0 +1,177 @@
+**Assignment 4**
+
+Gunjan Sethi: gunjans@andrew.cmu.edu
+
+<img src="images/one.png" width="200px">
+
+(#) Contents
+
+ - [Q1 Sphere Tracing](#q1)
+ - [Q2 Optimizing a Neural SDF](#q2)
+ - [Q3 VolSDF](#q3)
+ - [Q4 Phong Relighting](#q4)
+ - [Q5 Alternate SDF to Density Conversions] (#q5)
+ 
+
+<a name="q1">
+(#) Sphere Tracing
+
+The goal is to implement sphere tracing for rendering an SDF, and use this implementation to render a simple torus.
+
+(##) Implementation
+
+* Initialize a points with origin and mask.
+* Initialize an `eps_threshold` = `1e-5`
+* For the given number of `max_iterations`, shift points by the given distance in the given directions.
+* In each iteration, mask out points based on the initialized threshold. 
+
+Command: 
+
+`python -m a4.main --config-name=torus`
+
+(##) Result
+
+<img src="images/torus_part_1.gif" width="200px">
+<img src="images/part_1.gif" width="200px">
+
+
+<a name="q2">
+(#) Optimizing a Neural SDF
+
+The goal is to implement an MLP architecture for a neural SDF, and train this neural SDF on point cloud data. This is done by training the network to output a zero value at the observed points. To encourage the network to learn an SDF instead of an arbitrary function, 'eikonal' regularization is used.
+
+Command
+
+`python -m a4.main --config-name=points`
+
+(##) Model architecture
+
+```
+self.harmonic_embedding_xyz = HarmonicEmbedding(3, cfg.n_harmonic_functions_xyz)
+
+embedding_dim_xyz = self.harmonic_embedding_xyz.output_dim
+
+self.encoder_layer1 = torch.nn.Sequential(
+    torch.nn.Linear(embedding_dim_xyz, cfg.n_hidden_neurons_distance),
+    torch.nn.ReLU()
+)
+
+self.encoder_layer2 = torch.nn.Sequential(
+    torch.nn.Linear(cfg.n_hidden_neurons_distance, cfg.n_hidden_neurons_distance),
+    torch.nn.ReLU()
+)
+
+self.encoder_layer2 = self.encoder_layer2 * cfg.n_layers_distance
+
+self.distance_head = torch.nn.Sequential(
+    torch.nn.Linear(cfg.n_hidden_neurons_distance, 1),
+    torch.nn.ReLU()
+)
+
+```
+
+(##) Eikonal Loss
+
+The eikonal loss measures the distance between the estimated depth map and the ground truth depth map.
+
+It has the property of enforcing a so-called "monotonicity constraint" on the gradients of the estimated depth map. This means that the eikonal loss encourages the estimated depth map to have gradients that are always decreasing as the distance from the camera increases. This is a desirable property because in real-world scenes, the farther away an object is from the camera, the blurrier it appears in the image.
+
+
+(##) Result
+
+| Input | Prediction |
+| --- | --- |
+| <img src="images/new_part_2_input.gif" width="200px"> | <img src="images/new_part_2.gif" width="200px"> |
+
+
+<a name="q3">
+(#) VolSDF
+
+The goal is to implement a function for converting SDF to volume density and extend the above NeuralSurface model to predict color.
+
+Command
+
+`python -m a4.main --config-name=volsdf`
+
+(##) How does high beta bias your learned SDF? What about low beta?
+
+todo
+
+(##) Would an SDF be easier to train with volume rendering and low beta or high beta? Why?
+
+todo
+
+(##) Would you be more likely to learn an accurate surface with high beta or low beta? Why?
+
+todo
+
+(##) Model architecture
+
+```
+self.harmonic_embedding_xyz = HarmonicEmbedding(3, cfg.n_harmonic_functions_xyz)
+
+embedding_dim_xyz = self.harmonic_embedding_xyz.output_dim
+
+self.encoder_layer1 = torch.nn.Sequential(
+    torch.nn.Linear(embedding_dim_xyz, cfg.n_hidden_neurons_distance),
+    torch.nn.ReLU()
+)
+
+self.encoder_layer2 = torch.nn.Sequential(
+    torch.nn.Linear(cfg.n_hidden_neurons_distance, cfg.n_hidden_neurons_distance),
+    torch.nn.ReLU()
+)
+
+self.encoder_layer2 = self.encoder_layer2 * cfg.n_layers_distance
+
+self.distance_head = torch.nn.Sequential(
+    torch.nn.Linear(cfg.n_hidden_neurons_distance, 1),
+    torch.nn.ReLU()
+)
+
+self.color_head = torch.nn.Sequential(
+    torch.nn.Linear(cfg.n_hidden_neurons_distance, cfg.n_hidden_neurons_color),
+    torch.nn.ReLU(),
+    torch.nn.Linear(cfg.n_hidden_neurons_color, 3),
+    torch.nn.Sigmoid(),
+)
+```
+
+(##) Result
+
+
+| Geometry | With Color |
+| --- | --- |
+| <img src="images/og_part_3_geometry.gif"> | <img src="images/og_part_3.gif"> |
+
+
+<a name="q4">
+(#) Phong Relighting
+    
+The goal is to implement the Phong Reflection Model in order to render the SDF volume you trained under different lighting conditions. In principle, the Phong model can handle multiple different light sources coming from different directions, but for our implementation we assume we're working with a single directional light source that is coming in from light_dir and is of unit intensity. We will feed in a dictionary of Phong parameters containing ks, kd, ka, n, which refer to the specular, diffuse, ambient, and shininess constants respectively. The specular, diffuse, and ambient components describe the ratio of reflection to the specular, diffuse, or ambient components of light. The shininess constant describes how smooth the surface is, with higher values making it smoother and thus shinier.
+
+<img src="images/part_4_geometry.gif"> 
+
+<img src="images/part_4.gif"> 
+
+<a name="q5">
+(#) Alternate SDF to Density Conversions
+
+<img src="images/part_3.gif"> 
+
+
+```
+e = -signed_distance * 50
+sigma = 50 * torch.exp(e) / (1 + torch.exp(e))**2
+```
+
+<!--- Markdeep & image comparison library - probably no need to change anything below -->
+<style class="fallback">body{visibility:hidden;white-space:pre;font-family:monospace}</style><script src="./resources/markdeep.min.js"></script><script>window.alreadyProcessedMarkdeep||(document.body.style.visibility="visible")</script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+<script src="./resources/jquery.event.move.js"></script>
+<script src="./resources/jquery.twentytwenty.js"></script>
+<link href="./resources/offcanvas.css" rel="stylesheet">
+<link href="./resources/twentytwenty.css" rel="stylesheet" type="text/css" />
+<script>
+$(window).load(function(){$(".twentytwenty-container").twentytwenty({default_offset_pct: 0.5});});
+</script>

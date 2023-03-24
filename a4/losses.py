@@ -3,7 +3,18 @@ import torch.nn.functional as F
 
 def eikonal_loss(gradients):
     # TODO (Q2): Implement eikonal loss on Nx3 gradients
-    pass
+    # pass
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+    else:
+        device = torch.device("cpu")
+
+
+    loss_def = torch.nn.MSELoss()
+    eikonal_loss = loss_def(torch.linalg.norm(gradients,dim=-1),torch.ones(gradients.shape[0]).to(device))
+    return eikonal_loss
+
 
 def sphere_loss(signed_distance, points, radius=1.0):
     return torch.square(signed_distance[..., 0] - (torch.norm(points, dim=-1) - radius)).mean()
